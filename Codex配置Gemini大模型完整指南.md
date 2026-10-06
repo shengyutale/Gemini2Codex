@@ -1,6 +1,6 @@
 # Codex 配置与使用 Gemini 大模型完整保姆级指南
 
-> **前言**：本教程专为零代码基础用户编写。通过“后台静默转接头 + 桌面一键管家”的配合，彻底告别繁琐的手动命令，让官方 Codex 能够一键接入 Google Gemini 系列免费大模型，并在顶部下拉菜单中直接点选。
+> **前言**：本教程专为零代码基础用户编写。通过 CLI Proxy API + CC Switch，让官方 Codex 能够一键接入 Google Gemini 系列大模型，并在顶部下拉菜单中直接点选。
 
 ---
 
@@ -63,7 +63,7 @@
 
 ---
 
-### 第二步：授权 Google 账号（获取 Gemini 免费额度）
+### 第二步：授权 Google 账号
 
 > 每个 Google 账号**只需授权一次**，授权后凭证长期保存在本地，永久有效。
 
@@ -78,7 +78,7 @@
    ```
 4. 电脑默认浏览器会自动弹出 Google 授权登录页面（若未弹出，把黑框里的网址复制到浏览器打开）。
 5. 登录您的 Google 账号，点击【允许】/【授权】。
-6. 看到黑框提示登录成功后关闭黑框即可。登录凭证会自动保存在电脑的 `C:\Users\sheng\.cli-proxy-api\` 中。
+6. 看到黑框提示登录成功后关闭黑框即可。登录凭证会自动保存在电脑的 `C:\Users\用户名\.cli-proxy-api\` 中。
 
 ---
 
@@ -89,7 +89,56 @@
 cd /d D:\CLIProxyAPI_8.0.16_windows_amd64
 .\cli-proxy-api.exe -config .\config.yaml
 ```
-手动启动不仅容易误关黑色窗口导致服务中断，而且每次电脑开机都必须手动敲一遍。现在通过以下优化实现全自动化：
+手动启动不仅容易误关黑色窗口导致服务中断，而且每次电脑开机都必须手动敲一遍。现在通过全自动脚本实现一键配置：
+
+本项目在 `scripts/` 目录下提供了全套自动化脚本，只需双击运行 **`【一键配置】开机自启与桌面图标.vbs`**，即可全自动完成后台静默运行、开机自启以及桌面快捷图标配置。
+
+#### `【一键配置】开机自启与桌面图标.vbs` 代码展示：
+```vbscript
+Set ws = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+
+targetDir = "D:\CLIProxyAPI_8.0.16_windows_amd64"
+scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
+
+' 1. 将后台启动脚本与停止脚本复制到 D 盘程序目录
+vbsSource = fso.BuildPath(scriptDir, "启动_后台静默.vbs")
+vbsDest = fso.BuildPath(targetDir, "启动_后台静默.vbs")
+If fso.FileExists(vbsSource) Then
+    fso.CopyFile vbsSource, vbsDest, True
+End If
+
+stopSource = fso.BuildPath(scriptDir, "停止服务.bat")
+stopDest = fso.BuildPath(targetDir, "停止服务.bat")
+If fso.FileExists(stopSource) Then
+    fso.CopyFile stopSource, stopDest, True
+End If
+
+' 2. 创建开机自启动快捷方式
+startupFolder = ws.SpecialFolders("Startup")
+Set lnkStartup = ws.CreateShortcut(fso.BuildPath(startupFolder, "CLIProxyAPI_静默自启.lnk"))
+lnkStartup.TargetPath = vbsDest
+lnkStartup.WorkingDirectory = targetDir
+lnkStartup.WindowStyle = 0
+lnkStartup.IconLocation = fso.BuildPath(targetDir, "cli-proxy-api.exe") & ",0"
+lnkStartup.Save
+
+' 3. 创建桌面快捷方式
+desktopFolder = ws.SpecialFolders("Desktop")
+Set lnkDesktop = ws.CreateShortcut(fso.BuildPath(desktopFolder, "CLIProxyAPI (双击静默启动).lnk"))
+lnkDesktop.TargetPath = vbsDest
+lnkDesktop.WorkingDirectory = targetDir
+lnkDesktop.WindowStyle = 0
+lnkDesktop.IconLocation = fso.BuildPath(targetDir, "cli-proxy-api.exe") & ",0"
+lnkDesktop.Save
+
+msg = "CLIProxyAPI 开机自启与桌面图标配置成功！" & vbCrLf & vbCrLf
+msg = msg & "1. 电脑开机后将在后台自动静默运行（无黑框）。" & vbCrLf
+msg = msg & "2. 桌面上已生成【CLIProxyAPI (双击静默启动)】快捷方式。" & vbCrLf
+msg = msg & "3. 如需停止服务，运行 D 盘程序目录下的【停止服务.bat】即可。" & vbCrLf & vbCrLf
+msg = msg & "现在 Codex 已可直接从下拉菜单选择 Gemini 模型使用！"
+MsgBox msg, 64, "配置成功"
+```
 
 1. **静默运行原理**：通过 VBScript 脚本调用程序，彻底隐藏黑色控制台窗口。
 2. **开机自启**：将启动脚本放入 Windows 系统自启文件夹（`shell:startup`），开机即在后台静默运行。
@@ -110,14 +159,13 @@ cd /d D:\CLIProxyAPI_8.0.16_windows_amd64
    * **服务商名称**：`Gemini CLI Proxy API`
    * **API 接口地址 (Base URL)**：`http://localhost:8317/v1`
    * **API 密钥 (API Key)**：`local-gemini-key`
-   * **接口协议格式**：`OpenAI Responses`
 4. 在页面下方的 **【模型列表 (Model Catalog)】** 中添加需要使用的模型：
    * `gemini-3.8-flash-high`（主力高智商思考模型）
    * `gemini-3.5-flash-lite`（轻量极速模型）
    * `gemini-pro-agent`（专用智能体模型）
 5. 点击 **【保存】**，然后在卡片上点击 **【启用】**（或设为当前）。
 6. **底层自动完成**：
-   CC Switch 会自动生成 `C:\Users\sheng\.codex\cc-switch-model-catalog.json` 并修改 `config.toml`，使 Codex 具备下拉菜单能力。
+   CC Switch 会自动生成 `C:\Users\用户名\.codex\cc-switch-model-catalog.json` 并修改 `config.toml`，使 Codex 具备下拉菜单能力。
 
 ---
 
@@ -151,10 +199,9 @@ cd /d D:\CLIProxyAPI_8.0.16_windows_amd64
 | :--- | :--- | :--- |
 | **转接头程序** | `D:\CLIProxyAPI_8.0.16_windows_amd64\cli-proxy-api.exe` | 核心转接程序 |
 | **转接头配置** | `D:\CLIProxyAPI_8.0.16_windows_amd64\config.yaml` | 端口与代理设置 |
-| **Google凭证** | `C:\Users\sheng\.cli-proxy-api\` | Google 授权密钥存储目录 |
-| **总控管家程序** | `C:\Users\sheng\AppData\Local\Programs\CC Switch\cc-switch.exe` | 可视化切换软件 |
-| **桌面快捷方式** | `C:\Users\sheng\Desktop\CC Switch.lnk` | CC Switch 桌面图标 |
-| **Codex核心配置** | `C:\Users\sheng\.codex\config.toml` | Codex 软件主配置文件 |
-| **Codex模型菜单** | `C:\Users\sheng\.codex\cc-switch-model-catalog.json` | 下拉三角模型数据源 |
-| **自启动脚本库** | `C:\Users\sheng\Documents\Codex\2026-10-06\new-chat-6\outputs\` | 静默启动、停止及自启工具 |
-| **完整指南文档** | `C:\Users\sheng\Documents\Codex\Wiki\Codex配置Gemini大模型完整指南.md` | 本地 Markdown 手册 |
+| **Google凭证** | `C:\Users\用户名\.cli-proxy-api\` | Google 授权密钥存储目录 |
+| **总控管家程序** | `C:\Users\用户名\AppData\Local\Programs\CC Switch\cc-switch.exe` | 可视化切换软件 |
+| **桌面快捷方式** | `C:\Users\用户名\Desktop\CC Switch.lnk` | CC Switch 桌面图标 |
+| **Codex核心配置** | `C:\Users\用户名\.codex\config.toml` | Codex 软件主配置文件 |
+| **Codex模型菜单** | `C:\Users\用户名\.codex\cc-switch-model-catalog.json` | 下拉三角模型数据源 |
+| **完整指南文档** | `C:\Users\用户名\Documents\Codex\Wiki\Codex配置Gemini大模型完整指南.md` | 本地 Markdown 手册 |
